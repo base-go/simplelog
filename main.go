@@ -6,8 +6,11 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
 // LogLevel represents the severity of a log message
@@ -134,4 +137,72 @@ func (l *Logger) SetMaxFileSize(size int64) {
 // SetTimeFormat sets the time format used in log entries
 func (l *Logger) SetTimeFormat(format string) {
 	l.timeFormat = format
+}
+
+// GinMiddleware returns a Gin middleware function for logging HTTP requests
+func (l *Logger) GinMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now()
+		path := c.Request.URL.Path
+		raw := c.Request.URL.RawQuery
+
+		c.Next()
+
+		latency := time.Since(start)
+		if raw != "" {
+			path = path + "?" + raw
+		}
+
+		ua := c.Request.UserAgent()
+		os, browser := parseUserAgent(ua)
+
+		l.log(INFO, "Request: %s %s %d %s %s %s %s %s",
+			c.Request.Method,
+			path,
+			c.Writer.Status(),
+			c.ClientIP(),
+			latency.String(),
+			os,
+			browser,
+			c.Errors.String(),
+		)
+	}
+}
+
+// parseUserAgent extracts OS and browser information from the user agent string
+func parseUserAgent(ua string) (os, browser string) {
+	ua = strings.ToLower(ua)
+	// OS detection
+	switch {
+	case strings.Contains(ua, "windows"):
+		os = "Windows"
+	case strings.Contains(ua, "mac os"):
+		os = "macOS"
+	case strings.Contains(ua, "linux"):
+		os = "Linux"
+	case strings.Contains(ua, "android"):
+		os = "Android"
+	case strings.Contains(ua, "ios"):
+		os = "iOS"
+	default:
+		os = "Unknown"
+	}
+	// Browser detection
+	switch {
+	case strings.Contains(ua, "firefox"):
+		browser = "Firefox"
+	case strings.Contains(ua, "chrome"):
+		browser = "Chrome"
+	case strings.Contains(ua, "safari"):
+		browser = "Safari"
+	case strings.Contains(ua, "opera"):
+		browser = "Opera"
+	case strings.Contains(ua, "edge"):
+		browser = "Edge"
+	case strings.Contains(ua, "msie") || strings.Contains(ua, "trident"):
+		browser = "Internet Explorer"
+	default:
+		browser = "Unknown"
+	}
+	return
 }
